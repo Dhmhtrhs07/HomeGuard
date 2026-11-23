@@ -9,6 +9,8 @@ words what is risky and how to fix it, in **English** and **Greek**.
 ![HomeGuard dashboard](docs/screenshot.png)
 *Screenshot of a fictional demo network (no real devices).*
 
+> Built as a learning project with AI assistance (Claude). I designed the features, tested everything on my own network and I maintain it.
+
 ## Features
 
 - **Finds every device** on your network: ping sweep + ARP table, so it also catches devices that ignore ping
@@ -31,8 +33,8 @@ words what is risky and how to fix it, in **English** and **Greek**.
 You need [Python 3.10+](https://www.python.org/downloads/).
 
 ```bash
-git clone https://github.com/<your-username>/homeguard.git
-cd homeguard
+git clone https://github.com/Dhmhtrhs07/HomeGuard.git
+cd HomeGuard
 python -m pip install -r requirements.txt
 python app.py
 ```
@@ -125,8 +127,8 @@ MIT, see [LICENSE](LICENSE).
 Χρειάζεσαι [Python 3.10+](https://www.python.org/downloads/). Στην εγκατάσταση στα Windows τσέκαρε το «Add python.exe to PATH».
 
 ```bash
-git clone https://github.com/<your-username>/homeguard.git
-cd homeguard
+git clone https://github.com/Dhmhtrhs07/HomeGuard.git
+cd HomeGuard
 python -m pip install -r requirements.txt
 python app.py
 ```
