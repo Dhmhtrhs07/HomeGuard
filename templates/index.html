@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomeGuard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body data-running="{{ 1 if state.running else 0 }}">
+
+<header class="top">
+  <div class="brand">
+    <div class="logo">🛡️</div>
+    <div>
+      <h1>Home<span>Guard</span></h1>
+      <div class="muted">{{ t('tagline') }}</div>
+    </div>
+  </div>
+  <nav class="lang">
+    <a href="?lang=el" class="{{ 'on' if lang == 'el' }}">EL</a>
+    <a href="?lang=en" class="{{ 'on' if lang == 'en' }}">EN</a>
+  </nav>
+</header>
+
+<section class="scanbar">
+  <div class="netinfo">
+    {% if latest %}
+      <span class="muted">{{ t('network') }}</span> <span class="mono">{{ latest.network }}</span>
+      <span class="dot">·</span> {{ t('last_scan') }} {{ when(latest.time) }}
+      <span class="dot">·</span> {{ t('mode_deep') if latest.deep else t('mode_quick') }},
+      {{ t('took') }} {{ latest.duration }} {{ t('sec') }}
+    {% endif %}
+  </div>
+  <form method="post" action="{{ url_for('scan') }}" class="scanform">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="consent" id="consent"> {{ t('consent') }}</label>
+    <label class="check"><input type="checkbox" name="deep"> {{ t('deep') }}</label>
+    <button id="scanbtn" {% if state.running %}disabled{% endif %}>
+      {{ t('scanning') if state.running else '🔍 ' ~ t('scan_now') }}
+    </button>
+  </form>
+</section>
+
+<main>
+{% if just_finished %}
+  <div class="notice done">
+    <b>✅ {{ t('done_title') }}</b><br>
+    🛑 {{ t('done_text') }}
+  </div>
+{% endif %}
+{% if request.args.get('need_consent') %}<div class="notice">{{ t('consent_needed') }}</div>{% endif %}
+{% if state.error %}<details class="notice err"><summary>{{ t('error') }}</summary><pre>{{ state.error }}</pre></details>{% endif %}
+
+<div id="progress" class="progress" {% if not state.running %}hidden{% endif %}
+     data-discover="{{ t('phase_discover') }}" data-identify="{{ t('phase_identify') }}"
+     data-ports="{{ t('phase_ports') }}" data-banners="{{ t('phase_banners') }}" data-start="{{ t('phase_start') }}">
+  <div class="progress-text"><span id="phase">{{ t('phase_start') }}</span> <span id="count" class="muted"></span></div>
+  <div class="bar"><div id="bar-fill"></div></div>
+</div>
+
+{% if not latest %}
+  <section class="empty">
+    <div class="big">🛡️</div>
+    <h2>{{ t('empty_title') }}</h2>
+    <p>{{ t('empty_text') }}</p>
+  </section>
+{% else %}
+
+  <!-- ============ Score ============ -->
+  <section class="hero">
+    <div class="grade g{{ report.grade }}">
+      <div class="letter">{{ report.grade }}</div>
+      <div class="pts">{{ report.score }}/100</div>
+    </div>
+    <div class="hero-text">
+      <div class="muted upper">{{ t('score') }}</div>
+      <h2>{{ t('grade_' ~ report.grade) }}</h2>
+      <div class="chips">
+        {% for sev in ['critical','high','medium','low','info'] %}
+          {% if report.counts[sev] %}<span class="chip {{ sev }}">{{ report.counts[sev] }} {{ t('sev_' ~ sev) }}</span>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="stats">
+      <div><b>{{ latest.devices|length }}</b><span>{{ t('devices') }}</span></div>
+      <div><b>{{ total_ports }}</b><span>{{ t('open_ports') }}</span></div>
+      <div><b>{{ report.findings|length }}</b><span>{{ t('findings') }}</span></div>
+      <div><b>{{ scans|length }}</b><span>{{ t('scans') }}</span></div>
+    </div>
+  </section>
+
+  <!-- ============ Report ============ -->
+  <h2 class="section">{{ t('report') }}</h2>
+  {% if report.findings %}
+    <p class="muted hint">{{ t('report_hint') }}</p>
+    <div class="findings">
+    {% for f in report.findings %}
+      {% set kb = KB[f.key] %}
+      {% set icon, tname = dtype(f.type) %}
+      <details class="finding {{ f.severity }} {{ 'local' if f.local_only }}">
+        <summary>
+          <span class="sev {{ f.severity }}">{{ t('sev_' ~ f.severity) }}</span>
+          <span class="ftitle">{{ tr(kb.title) }}</span>
+          <span class="where mono">{{ icon }} {{ tname }} · {{ f.ip }}{% if f.port %} · {{ t('port') }} {{ f.port }}{% endif %}</span>
+        </summary>
+        <div class="fbody">
+          {% if f.local_only %}<p class="localnote">ℹ️ {{ t('local_only') }}</p>{% endif %}
+          {% if f.detail %}<p class="mono detail">{{ f.detail }}</p>{% endif %}
+          <h4>{{ t('why') }}</h4>
+          <p>{{ tr(kb.why) }}</p>
+          <h4>{{ t('fix') }}</h4>
+          <p>{{ tr(kb.fix) }}</p>
+          <p class="links">
+            {% if kb.learn %}<a href="{{ kb.learn }}" target="_blank" rel="noopener noreferrer">{{ t('learn') }} ↗</a>{% endif %}
+            {% if f.key == 'version_leak' %}
+              <a href="https://nvd.nist.gov/vuln/search/results?form_type=Basic&results_type=overview&query={{ f.detail|urlencode }}"
+                 target="_blank" rel="noopener noreferrer">{{ t('search_cve') }} ↗</a>
+            {% endif %}
+          </p>
+        </div>
+      </details>
+    {% endfor %}
+    </div>
+  {% else %}
+    <div class="panel good">✅ {{ t('no_findings') }}</div>
+  {% endif %}
+
+  <!-- ============ Changes ============ -->
+  {% if scans|length > 1 %}
+  <h2 class="section">{{ t('changes') }}</h2>
+  <div class="panel changes">
+    {% for c in changes %}
+      {% set d = c.device %}
+      {% set icon, tname = dtype(d.type) %}
+      <div class="chg {{ c.kind }}">
+        {% if c.kind == 'new' %}🚨 <b>{{ t('ch_new') }}:</b> {{ d.ip }} · {{ d.hostname or vendor(d) }} · <span class="mono">{{ d.mac }}</span>
+        {% elif c.kind == 'back' %}↩️ {{ t('ch_back') }}: {{ icon }} {{ tname }} · {{ d.ip }}{% if d.hostname %} · {{ d.hostname }}{% endif %}
+        {% elif c.kind == 'port_open' %}⚠️ {{ icon }} {{ tname }} ({{ d.ip }}) {{ t('ch_port_open') }} {{ c.port }}
+        {% elif c.kind == 'port_closed' %}➖ {{ icon }} {{ tname }} ({{ d.ip }}) {{ t('ch_port_closed') }} {{ c.port }}
+        {% else %}➖ {{ t('ch_gone') }}: {{ icon }} {{ tname }} · {{ d.ip }}{% if d.hostname %} · {{ d.hostname }}{% endif %}
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="chg gone">{{ t('no_changes') }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- ============ Devices ============ -->
+  <h2 class="section">{{ t('devices') }}</h2>
+  <div class="grid">
+  {% for d in latest.devices %}
+    {% set icon, tname = dtype(d.type) %}
+    {% set fl = by_device.get(d.ip, []) %}
+    {% set worst = (fl|rejectattr('local_only')|map(attribute='severity')|list) %}
+    {% set level = 'critical' if 'critical' in worst else 'high' if 'high' in worst else 'medium' if 'medium' in worst else 'ok' %}
+    {% set h = hist.get(d.mac or d.ip) %}
+    <article class="card {{ level }}">
+      <div class="card-top">
+        <div class="icon">{{ icon }}</div>
+        <div>
+          <div class="title">{{ tname }}</div>
+          <div class="mono">{{ d.ip }}{% if d.hostname %} · {{ d.hostname }}{% endif %}</div>
+        </div>
+      </div>
+      <div class="meta">
+        {% if d.mac %}<span class="mono">{{ d.mac }}</span> · {% endif %}{{ vendor(d) }}<br>
+        ping: {{ '✓' if d.ping else '✗' }}
+        {% if h %} · {{ t('first_seen') }} {{ when(h.first) }} · {{ t('seen_in') }} {{ h.count }}/{{ scans|length }} {{ t('of_scans') }}{% endif %}
+      </div>
+      {% if d.open_ports %}
+        <ul class="ports">
+        {% for p in d.open_ports %}
+          {% set b = d.banners.get(p|string, {}) %}
+          <li>
+            <span class="pnum mono">{{ p }}</span>
+            <span class="pname">{{ service_names.get(p, '') }}</span>
+            <span class="banner mono">{{ b.text if b.text and not b.text.startswith('(') else '' }}{% if b.tls and b.text and not b.text.startswith('(') %} 🔒{% endif %}</span>
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted small">{{ t('no_ports') }}</div>
+      {% endif %}
+      {% if fl %}
+        <div class="badges">
+        {% for f in fl %}<span class="sev {{ f.severity }} {{ 'faded' if f.local_only }}">{{ tr(KB[f.key].title) }}</span>{% endfor %}
+        </div>
+      {% endif %}
+    </article>
+  {% endfor %}
+  </div>
+
+  <!-- ============ Missing ============ -->
+  {% if missing %}
+  <h2 class="section">{{ t('missing') }}</h2>
+  <table>
+    {% for h in missing %}
+      {% set icon, tname = dtype(h.device.type) %}
+      <tr>
+        <td>{{ icon }} {{ tname }}{% if h.device.hostname %} · {{ h.device.hostname }}{% endif %}</td>
+        <td class="mono">{{ h.device.ip }}</td>
+        <td class="mono">{{ h.device.mac }}</td>
+        <td class="muted">{{ t('last_seen') }} {{ when(h.last) }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+{% endif %}
+
+  <!-- ============ Checklist ============ -->
+  <h2 class="section">{{ t('checklist') }}</h2>
+  <ul class="checklist">
+    {% for item in CHECKLIST %}<li>{{ tr(item) }}</li>{% endfor %}
+  </ul>
+</main>
+
+<footer>
+  <div class="actions">
+    {% if latest %}
+    <button type="button" id="printbtn" class="ghost">🖨️ {{ t('print') }}</button>
+    <a class="ghost" href="{{ url_for('latest_json') }}">⬇️ {{ t('json') }}</a>
+    {% endif %}
+    <form method="post" action="{{ url_for('stop') }}" class="stopform">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost danger" {% if state.running %}disabled{% endif %}>🛑 {{ t('stop') }}</button>
+    </form>
+  </div>
+  <p class="muted small">🛑 {{ t('stop_hint') }}</p>
+  <p class="muted small">{{ t('footer') }}</p>
+  <p class="muted small">HomeGuard v{{ version }}</p>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
