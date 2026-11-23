@@ -1,0 +1,13 @@
+# Scan results contain details about YOUR network - never commit them
+scans/*.json
+# Downloaded vendor databases
+data/oui.csv
+data/manuf.txt
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+Thumbs.db
